@@ -6,7 +6,6 @@
 #include <QKeySequence>
 #include <QMessageBox>
 
-#include "appsettings.h"
 #include "components/evidence_editor/evidenceeditor.h"
 #include "helpers/netman.h"
 #include "helpers/stopreply.h"

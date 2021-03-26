@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "appconfig.h"
+#include "appservers.h"
 #include "request_builder.h"
 #include "dtos/operation.h"
 #include "dtos/tag.h"
@@ -21,7 +22,6 @@
 #include "helpers/multipartparser.h"
 #include "helpers/stopreply.h"
 #include "models/evidence.h"
-
 
 class NetMan : public QObject {
   Q_OBJECT
@@ -56,7 +56,7 @@ class NetMan : public QObject {
   /// Allows for an optional altHost parameter, in order to check for ashirt servers.
   /// Normal usage should provide no value for this parameter.
   RequestBuilder* ashirtGet(QString endpoint, const QString & altHost="") {
-    QString base = (altHost == "") ? AppConfig::getInstance().apiURL : altHost;
+    QString base = (altHost == "") ? AppServers::getInstance().hostPath() : altHost;
     return RequestBuilder::newGet()
         ->setHost(base)
         ->setEndpoint(endpoint);
@@ -66,7 +66,7 @@ class NetMan : public QObject {
   /// authentication is provided (use addASHIRTAuth to do this)
   RequestBuilder* ashirtJSONPost(QString endpoint, QByteArray body) {
     return RequestBuilder::newJSONPost()
-        ->setHost(AppConfig::getInstance().apiURL)
+        ->setHost(AppServers::getInstance().hostPath())
         ->setEndpoint(endpoint)
         ->setBody(body);
   }
@@ -75,7 +75,7 @@ class NetMan : public QObject {
   /// No authentication is provided (use addASHIRTAuth to do this)
   RequestBuilder* ashirtFormPost(QString endpoint, QByteArray body, QString boundry) {
     return RequestBuilder::newFormPost(boundry)
-        ->setHost(AppConfig::getInstance().apiURL)
+        ->setHost(AppServers::getInstance().hostPath())
         ->setEndpoint(endpoint)
         ->setBody(body);
   }
@@ -91,7 +91,7 @@ class NetMan : public QObject {
     // load default key if not present
     QString apiKeyCopy = QString(altApiKey);
     if (apiKeyCopy.isEmpty()) {
-      apiKeyCopy = AppConfig::getInstance().accessKey;
+      apiKeyCopy = AppServers::getInstance().accessKey();
     }
 
     auto code = generateHash(RequestMethodToString(reqBuilder->getMethod()),
@@ -111,7 +111,7 @@ class NetMan : public QObject {
 
     QString secretKeyCopy = QString(secretKey);
     if (secretKeyCopy.isEmpty()) {
-      secretKeyCopy = AppConfig::getInstance().secretKey;
+      secretKeyCopy = AppServers::getInstance().secretKey();
     }
 
     QMessageAuthenticationCode code(QCryptographicHash::Sha256);
@@ -125,18 +125,9 @@ class NetMan : public QObject {
   /// onGetOpsComplete is called when the network request associated with the method refreshOperationsList
   /// completes. This will emit an operationListUpdated signal.
   void onGetOpsComplete() {
-    bool isValid;
-    auto data = extractResponse(allOpsReply, isValid);
-    if (isValid) {
-      OperationVector ops = dto::Operation::parseDataAsList(data);
-      std::sort(ops.begin(), ops.end(),
-                [](dto::Operation i, dto::Operation j) { return i.name < j.name; });
-
-      emit operationListUpdated(true, ops);
-    }
-    else {
-      emit operationListUpdated(false);
-    }
+    bool success = false;
+    OperationVector ops = parseOpsResponse(allOpsReply, success);
+    emit operationListUpdated(success, ops);
     tidyReply(&allOpsReply);
   }
 
@@ -156,6 +147,25 @@ class NetMan : public QObject {
   }
 
  public:
+
+  OperationVector parseOpsResponse(QNetworkReply* reply, bool &success, bool doSort=true) {
+    bool isValid;
+    auto data = extractResponse(reply, isValid);
+    if (isValid) {
+      OperationVector ops = dto::Operation::parseDataAsList(data);
+      if (doSort) {
+        std::sort(ops.begin(), ops.end(),
+                  [](dto::Operation i, dto::Operation j) { return i.name < j.name; });
+      }
+
+      success = true;
+      return ops;
+    }
+    else {
+      success = false;
+      return {};
+    }
+  }
 
   /// uploadAsset takes the given Evidence model, encodes it (and the file), and uploads this
   /// to the configured ASHIRT API server. Returns a QNetworkReply to track the request
@@ -196,9 +206,9 @@ class NetMan : public QObject {
   /// getAllOperations retrieves all (user-visble) operations from the configured ASHIRT API server.
   /// Note: normally you should opt to use refreshOperationsList and retrieve the results by listening
   /// for the operationListUpdated signal.
-  QNetworkReply *getAllOperations() {
-    auto builder = ashirtGet("/api/operations");
-    addASHIRTAuth(builder);
+  QNetworkReply *getAllOperations(const QString& host="", const QString& apiKey="", const QString& secretKey="") {
+    auto builder = ashirtGet("/api/operations", host);
+    addASHIRTAuth(builder, apiKey, secretKey);
     return builder->execute(nam);
   }
 

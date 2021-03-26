@@ -30,9 +30,9 @@ QString Screenshot::formatScreenshotCmd(QString cmdProto, const QString &filenam
   return cmdProto.replace(idx, key.length(), fixedFilename);
 }
 
-void Screenshot::captureArea() { basicScreenshot(AppConfig::getInstance().screenshotExec); }
+void Screenshot::captureArea() { basicScreenshot(AppConfig::getInstance().captureScreenAreaCmd()); }
 
-void Screenshot::captureWindow() { basicScreenshot(AppConfig::getInstance().captureWindowExec); }
+void Screenshot::captureWindow() { basicScreenshot(AppConfig::getInstance().captureScreenWindowCmd()); }
 
 QString Screenshot::mkName() {
   return FileHelpers::randomFilename("ashirt_screenshot_XXXXXX." + extension());

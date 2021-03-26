@@ -37,8 +37,13 @@ Updating the database schema is slightly complicated, and the following rules mu
    * This should also add this migration to the qrc file. However, if this is not done, you can do this manually by editing the `rs_migrations.qrc` file.
 2. Inside the new migration file, add the necessary sql to apply the db change under `-- +migrate Up`
 3. Inside the new migration file, add the necessary sql to _undo_ the db change under `-- +migrate Down`
-4. Only one statement is allowed under each heading. If multiple statements need to be applied, they should done as multiple migration files
-   * This is a sqlite3/Qt limitation.
+4. Multiple statements are not supported by default with sqlite3/Qt, however, support has been hacked together. To use multiple statements in a section, create a line with a single semicolon delimiting the statements.
+   e.g.
+   ```sql
+   INSERT INTO names (first, last) VALUES ('john', 'doe')
+   ;
+   INSERT INTO names (first, last) VALUES ('jane', 'doe')
+   ```
 
 ## Adding a new Evidence Filter
 

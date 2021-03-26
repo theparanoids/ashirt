@@ -10,6 +10,7 @@
 #include "helpers/jsonhelpers.h"
 #include "helpers/screenshot.h"
 #include "appconfig.h"
+#include "appservers.h"
 #include "appsettings.h"
 #include "db/databaseconnection.h"
 #include "evidence_manifest.h"
@@ -92,9 +93,17 @@ class SystemManifest : public QObject {
  private:
   /**
    * @brief migrateConfig imports the config file associated with the started import
-   * @throws FileError if the config file cannot be copied
+   * @throws FileError if the config file cannot be read
+   * @throws Exception if the config file cannot be parsed
    */
   void migrateConfig();
+
+  /**
+   * @brief migrateServers imports the servers file associated with the started import
+   * @throws FileError if the servers file cannot be copied
+   */
+  void migrateServers();
+
   /**
    * @brief migrateDb imports all of the database and evidence files associated with the started import
    * emits onStatusUpdate signal for periodic progress updates

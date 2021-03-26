@@ -15,8 +15,8 @@
 #include <QDesktopServices>
 #include <iostream>
 
-#include "appconfig.h"
 #include "appsettings.h"
+#include "appservers.h"
 #include "db/databaseconnection.h"
 #include "forms/getinfo/getinfo.h"
 #include "helpers/clipboard/clipboardhelper.h"
@@ -93,7 +93,7 @@ TrayManager::~TrayManager() {
 
 void TrayManager::buildUi() {
   // create subwindows
-  settingsWindow = new Settings(hotkeyManager, this);
+  settingsWindow = new Settings(db, hotkeyManager, this);
   evidenceManagerWindow = new EvidenceManager(db, this);
   creditsWindow = new Credits(this);
   importWindow = new PortingDialog(PortingDialog::Import, db, this);
@@ -121,6 +121,7 @@ void TrayManager::buildUi() {
   trayIconMenu->addSeparator();
   addToMenu(tr(""), &currentOperationMenuAction, &trayIconMenu);
   addMenuToMenu(tr("Select Operation"), &chooseOpSubmenu, &trayIconMenu);
+  addMenuToMenu(tr("Select Server"), &chooseServerSubmenu, &trayIconMenu);
   trayIconMenu->addSeparator();
   addMenuToMenu(tr("Import/Export"), &importExportSubmenu, &trayIconMenu);
   addToMenu(tr("Settings"), &showSettingsAction, &trayIconMenu);
@@ -137,7 +138,6 @@ void TrayManager::buildUi() {
   chooseOpSubmenu->addSeparator();
 
   // settings submenu
-
   addToMenu(tr("Export Data"), &exportAction, &importExportSubmenu);
   addToMenu(tr("Import Data"), &importAction, &importExportSubmenu);
 
@@ -199,13 +199,9 @@ void TrayManager::wireUi() {
   connect(&NetMan::getInstance(), &NetMan::releasesChecked, this, &TrayManager::onReleaseCheck);
   connect(&AppSettings::getInstance(), &AppSettings::onOperationUpdated, this,
           &TrayManager::setActiveOperationLabel);
-  
+
   connect(trayIcon, &QSystemTrayIcon::messageClicked, this, &TrayManager::onTrayMessageClicked);
-  connect(trayIcon, &QSystemTrayIcon::activated, [this] {
-    chooseOpStatusAction->setText("Loading operations...");
-    newOperationAction->setEnabled(false);
-    NetMan::getInstance().refreshOperationsList();
-  });
+  connect(trayIcon, &QSystemTrayIcon::activated, this, &TrayManager::onTrayMenuOpened);
 
   connect(updateCheckTimer, &QTimer::timeout, this, &TrayManager::checkForUpdate);
 }
@@ -217,7 +213,16 @@ void TrayManager::cleanChooseOpSubmenu() {
     delete act;
   }
   allOperationActions.clear();
-  selectedAction = nullptr; // clear the selected action to ensure no funny business
+  selectedOperationAction = nullptr; // clear the selected action to ensure no funny business
+}
+
+void TrayManager::cleanChooseServerSubmenu() {
+  for (QAction* act : allServerActions) {
+    chooseServerSubmenu->removeAction(act);
+    delete act;
+  }
+  allServerActions.clear();
+  selectedServerAction = nullptr; // clear the selected action to ensure no funny business
 }
 
 void TrayManager::closeEvent(QCloseEvent* event) {
@@ -242,7 +247,7 @@ void TrayManager::spawnGetInfoWindow(qint64 evidenceID) {
 
 qint64 TrayManager::createNewEvidence(const QString& filepath, const QString& evidenceType) {
   AppSettings& inst = AppSettings::getInstance();
-  auto evidenceID = db->createEvidence(filepath, inst.operationSlug(), evidenceType);
+  auto evidenceID = db->createEvidence(filepath, inst.operationSlug(), inst.serverUuid(), evidenceType);
   auto tags = inst.getLastUsedTags();
   if (!tags.empty()) {
     db->setEvidenceTags(tags, evidenceID);
@@ -306,12 +311,59 @@ void TrayManager::showNoOperationSetTrayMessage() {
 }
 
 void TrayManager::setActiveOperationLabel() {
+  auto serverName = AppServers::getInstance().serverName();
   auto opName = AppSettings::getInstance().operationName();
 
-  QString opLabel = tr("Operation: ");
+  QString opLabel = tr("Using: ");
   opLabel += (opName == "") ? tr("<None>") : opName;
 
+  if (serverName != "") {
+    opLabel += " @ " + serverName;
+  }
+
   currentOperationMenuAction->setText(opLabel);
+}
+
+void TrayManager::onTrayMenuOpened() {
+  chooseOpStatusAction->setText("Loading operations...");
+  newOperationAction->setEnabled(false);
+  NetMan::getInstance().refreshOperationsList();
+
+  cleanChooseServerSubmenu();
+  std::vector<ServerItem> allConnections = AppServers::getInstance().getServers();
+  QString currentServerUuid = AppSettings::getInstance().serverUuid();
+
+  std::sort(allConnections.begin(), allConnections.end(), [](ServerItem a, ServerItem b){return a.serverName < b.serverName;});
+
+  for (auto item : allConnections) {
+    const QString serverUuid = item.getServerUuid();
+    auto newAction = new QAction(item.serverName, chooseServerSubmenu);
+
+    if (currentServerUuid == serverUuid) {
+      newAction->setCheckable(true);
+      newAction->setChecked(true);
+      selectedServerAction = newAction;
+    }
+
+    connect(newAction, &QAction::triggered, [this, newAction, serverUuid] {
+      if (selectedServerAction != nullptr) {
+        selectedServerAction->setChecked(false);
+        selectedServerAction->setCheckable(false);
+      }
+      newAction->setCheckable(true);
+      newAction->setChecked(true);
+
+      //switchServer
+      cleanChooseOpSubmenu();
+      AppSettings::getInstance().setServerUuid(serverUuid);
+      NetMan::getInstance().refreshOperationsList();
+
+      selectedServerAction = newAction;
+    });
+
+    allServerActions.push_back(newAction);
+    chooseServerSubmenu->addAction(newAction);
+  }
 }
 
 void TrayManager::onOperationListUpdated(bool success,
@@ -329,24 +381,24 @@ void TrayManager::onOperationListUpdated(bool success,
       if (currentOp == op.slug) {
         newAction->setCheckable(true);
         newAction->setChecked(true);
-        selectedAction = newAction;
+        selectedOperationAction = newAction;
       }
 
       connect(newAction, &QAction::triggered, [this, newAction, op] {
         AppSettings::getInstance().setLastUsedTags(std::vector<model::Tag>{}); // clear last used tags
         AppSettings::getInstance().setOperationDetails(op.slug, op.name);
-        if (selectedAction != nullptr) {
-          selectedAction->setChecked(false);
-          selectedAction->setCheckable(false);
+        if (selectedOperationAction != nullptr) {
+          selectedOperationAction->setChecked(false);
+          selectedOperationAction->setCheckable(false);
         }
         newAction->setCheckable(true);
         newAction->setChecked(true);
-        selectedAction = newAction;
+        selectedOperationAction = newAction;
       });
       allOperationActions.push_back(newAction);
       chooseOpSubmenu->addAction(newAction);
     }
-    if (selectedAction == nullptr) {
+    if (selectedOperationAction == nullptr) {
       AppSettings::getInstance().setOperationDetails("", "");
     }
   }
@@ -389,5 +441,4 @@ void TrayManager::onTrayMessageClicked() {
       break;
   }
 }
-
 #endif

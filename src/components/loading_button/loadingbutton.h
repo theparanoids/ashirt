@@ -20,6 +20,7 @@ class LoadingButton : public QPushButton {
 
   void startAnimation();
   void stopAnimation();
+  bool isAnimating();
 
  private:
   void showLabel(bool show);

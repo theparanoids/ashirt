@@ -35,8 +35,20 @@ class DBQuery {
   inline std::vector<QVariant> values() { return _values; }
 };
 
+/**
+ * @brief The DatabaseConnection class manages a connection to the database and provides an interface
+ *        into common operations
+ */
 class DatabaseConnection {
  public:
+
+  /**
+   * @brief DatabaseConnection constructs a connection to a specific sqlite database.
+   *
+   * @see Constants::dbLocation() for the location to the database file
+   * @throws DBDriverUnavailable if the required database driver does not exist
+   * @throws QSqlError in other cases
+   */
   DatabaseConnection(const QString& dbPath, QString databaseName);
 
   /**
@@ -56,25 +68,28 @@ class DatabaseConnection {
   void close() noexcept;
 
   static DBQuery buildGetEvidenceWithFiltersQuery(const EvidenceFilters &filters);
+  bool hasAppliedSystemMigration(QString systemMigrationName);
+  qint64 applySystemMigration(QString systemMigrationName);
 
   model::Evidence getEvidenceDetails(qint64 evidenceID);
   std::vector<model::Evidence> getEvidenceWithFilters(const EvidenceFilters &filters);
 
   qint64 createEvidence(const QString &filepath, const QString &operationSlug,
-                        const QString &contentType);
+                        const QString &serverUuid, const QString &contentType);
   qint64 createFullEvidence(const model::Evidence &evidence);
   void batchCopyFullEvidence(const std::vector<model::Evidence> &evidence);
   qint64 copyFullEvidence(const model::Evidence &evidence);
-
+  void updateEvidencePath(const QString& newPath, qint64 evidenceID);
+  void deleteEvidence(qint64 evidenceID);
   void updateEvidenceDescription(const QString &newDescription, qint64 evidenceID);
   void updateEvidenceError(const QString &errorText, qint64 evidenceID);
   void updateEvidenceSubmitted(qint64 evidenceID);
-  void updateEvidencePath(const QString& newPath, qint64 evidenceID);
+
+  std::vector<QString> operationSlugsForServer(const QString &operationSlug);
+
   void setEvidenceTags(const std::vector<model::Tag> &newTags, qint64 evidenceID);
   void batchCopyTags(const std::vector<model::Tag> &allTags);
   std::vector<model::Tag> getFullTagsForEvidenceIDs(const std::vector<qint64>& evidenceIDs);
-
-  void deleteEvidence(qint64 evidenceID);
 
   /// createEvidenceExportView duplicates the normal database with only a subset of evidence
   /// present, as well as related data (e.g. tags)
@@ -89,6 +104,8 @@ class DatabaseConnection {
   /// getDatabasePath returns the filepath associated with the loaded database
   QString getDatabasePath();
 
+  
+
  public:
   const unsigned long SQLITE_MAX_VARS = 999;
 
@@ -96,19 +113,73 @@ class DatabaseConnection {
   QString dbName = "";
   QString _dbPath = "";
 
+  /**
+   * @brief getSingleField retrieves a single value/cell from the provided query. If the query
+   *        returns no rows, then an invalid QVariant is returned instead.
+   * @param query The query to execute
+   * @param args any bindings needed to execute the statement
+   * @return a QVariant holding the result, or an invalid QVariant if no rows are returned
+   * @throws QSqlError when a query error occurs
+   */
+  QVariant getSingleField(const QString& query, const std::vector<QVariant> &args);
+
+  /**
+   * @brief migrateDB checks the migration status and then performs the full migration for any
+   *        lacking update.
+   * @throws exceptions/FileError if a migration file cannot be found.
+   */
   void migrateDB();
+
   QSqlDatabase getDB();
 
+  /**
+   * @brief getUnappliedMigrations Retrieves a list of all of the migrations that have not been
+   *        applied to the given database.
+   *        Note: All sql files must end in ".sql" to be picked up
+   * @param db the database connection
+   * @return A list of all of the migrations that have not yet been applied
+   * @throws BadDatabaseStateError if some migrations have been applied that are not known
+   * @throws QSqlError if database queries fail
+   */
   static QStringList getUnappliedMigrations(const QSqlDatabase &db);
-  static QString extractMigrateUpContent(const QString &allContent) noexcept;
-  static QSqlQuery executeQuery(const QSqlDatabase& db, const QString &stmt,
+
+  /**
+   * @brief extractMigrateUpContent Parses the given migration content and retrieves only the
+   *        portion that applies to the "up" / apply logic. The "down" section is ignored. The
+   *        statements are interpreted via a line with a single semicolon separating multiple
+   *        statements.
+   * @param allContent The (raw) contents of the sql migration script
+   * @return a QStringList containing each segment for the 'up' section
+   */
+  static QStringList extractMigrateUpContent(const QString &allContent) noexcept;
+
+  /**
+   * @brief executeQuery Attempts to execute the given stmt with the passed args. The statement is
+   *        first prepared, and arg placements can be specified with "?".
+   * @param db the database connection
+   * @param stmt the query to execute
+   * @param args any bindings needed to execute the statement
+   * @return the executed query / the effective result set
+   * @throws QSqlError when a query error occurs
+   */
+  static QSqlQuery executeQuery(const QSqlDatabase &db, const QString &stmt,
                                 const std::vector<QVariant> &args = {});
 
   /// executeQueryNoThrow provides a safe mechanism to execute a query on the database. (Safe in the
   /// sense that no exception is thrown). It is incumbent on the caller to inspect the
   /// QueryResult.sucess/QueryResult.err fields to determine the actual result.
-  static QueryResult executeQueryNoThrow(const QSqlDatabase& db, const QString &stmt,
-                                const std::vector<QVariant> &args = {}) noexcept;
+  static QueryResult executeQueryNoThrow(const QSqlDatabase &db, const QString &stmt,
+                                         const std::vector<QVariant> &args = {}) noexcept;
+  
+  /**
+   * @brief doInsert is a version of executeQuery that returns the last inserted id, rather than the
+   *        underlying query/response.
+   * @param db the database connection
+   * @param stmt the query to execute
+   * @param args any bindings needed to execute the statement
+   * @return the last inserted id if successful
+   * @throws QSqlError when a query error occurs
+   */
   static qint64 doInsert(const QSqlDatabase &db, const QString &stmt, const std::vector<QVariant> &args);
 
   /**

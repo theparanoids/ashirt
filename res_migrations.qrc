@@ -7,5 +7,7 @@
         <file>migrations/20200625192018-support-codeblocks-p2.sql</file>
         <file>migrations/20200625192444-support-codeblocks-p3.sql</file>
         <file>migrations/20200625203249-support-codeblocks-p4.sql</file>
+        <file>migrations/20201008155705-add-system-migrations.sql</file>
+        <file>migrations/20201022204922-multiple-backends.sql</file>
     </qresource>
 </RCC>

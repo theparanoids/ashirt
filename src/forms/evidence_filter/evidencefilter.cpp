@@ -3,7 +3,7 @@
 
 #include "evidencefilter.h"
 
-EvidenceFilters::EvidenceFilters() = default;
+#include "appservers.h"
 
 QString EvidenceFilters::standardizeFilterKey(QString key) {
   if (FILTER_KEYS_ERROR.contains(key, Qt::CaseInsensitive)) {
@@ -27,6 +27,12 @@ QString EvidenceFilters::standardizeFilterKey(QString key) {
   if (FILTER_KEYS_CONTENT_TYPE.contains(key, Qt::CaseInsensitive)) {
     return FILTER_KEY_CONTENT_TYPE;
   }
+  if (FILTER_KEYS_SERVER_UUID.contains(key, Qt::CaseInsensitive)) {
+    return FILTER_KEY_SERVER_UUID;
+  }
+  if (FILTER_KEYS_SERVER_NAME.contains(key, Qt::CaseInsensitive)) {
+    return FILTER_KEY_SERVER_NAME;
+  }
   return key;
 }
 
@@ -44,32 +50,39 @@ QString EvidenceFilters::toString() const {
   };
   static auto triToText = [](Tri t) -> QString { return t == Yes ? "yes" : "no"; };
 
+  QString fieldTemplate = " %1: %2"; //intentional space to provide gaps between fields
+  auto quote = [](QString val){ return QString(R"("%1")").arg(val); };
+
   QString rtn = "";
+  auto append = [&rtn, fieldTemplate](QString key, QString value){
+    rtn.append(fieldTemplate.arg(key, value));
+  };
+
   if (!operationSlug.isEmpty()) {
-    rtn.append(" " + FILTER_KEY_OPERATION + ": " + operationSlug);
+    append(FILTER_KEY_OPERATION, operationSlug);
   }
   if (!contentType.isEmpty()) {
-    rtn.append(" " + FILTER_KEY_CONTENT_TYPE + ": " + contentType);
+    append(FILTER_KEY_CONTENT_TYPE, contentType);
   }
   if (hasError != Any) {
-    rtn.append(" " + FILTER_KEY_ERROR + ": " + triToText(hasError));
+    append(FILTER_KEY_ERROR, triToText(hasError));
   }
   if (startDate.isValid() || endDate.isValid()) {
     if (startDate == endDate) {
-      rtn.append(" " + FILTER_KEY_ON + ": " + toCommonDate(startDate));
+      append(FILTER_KEY_ON, toCommonDate(startDate));
     }
-    else {
-      if (startDate.isValid()) {
-        rtn.append(" " + FILTER_KEY_FROM + ": " + toCommonDate(startDate));
-      }
-
-      if (endDate.isValid()) {
-        rtn.append(" " + FILTER_KEY_TO + ": " + toCommonDate(endDate));
-      }
+    else if (startDate.isValid()) {
+      append(FILTER_KEY_FROM, toCommonDate(startDate));
+    }
+    else { // endDate must be valid
+      append(FILTER_KEY_TO, toCommonDate(endDate));
     }
   }
   if (submitted != Any) {
-    rtn.append(" " + FILTER_KEY_SUBMITTED + ": " + triToText(submitted));
+    append(FILTER_KEY_SUBMITTED, triToText(submitted));
+  }
+  if (!serverUuid.isEmpty()) {
+    append(FILTER_KEY_SERVER_NAME, quote(getServerName()));
   }
 
   return rtn.trimmed();
@@ -98,6 +111,15 @@ EvidenceFilters EvidenceFilters::parseFilter(const QString& text) {
     else if (key == FILTER_KEY_OPERATION) {
       filter.operationSlug = value;
     }
+    else if (key == FILTER_KEY_SERVER_UUID || key == FILTER_KEY_SERVER_NAME) {
+      // these speak to the same field -- prefer the value in serverUuid
+      if (key == FILTER_KEY_SERVER_UUID) {
+        filter.serverUuid = value;
+      }
+      else {
+        filter.setServerByName(value);
+      }
+    }
     else if (key == FILTER_KEY_TO) {
       filter.endDate = parseDateString(value);
     }
@@ -117,10 +139,6 @@ EvidenceFilters EvidenceFilters::parseFilter(const QString& text) {
   return filter;
 }
 
-// parseTriFilterValue returns a Tri object given a string. If the given string is "t" or "y"
-// then Tri::Yes will be returned. Otherwise, in non-strict mode, Tri::No will be returned.
-// In strict mode, Tri::No will be returned only if it starts with "f" or "n", otherwise Tri::Any
-// is returned.
 Tri EvidenceFilters::parseTriFilterValue(const QString& text, bool strict) {
   auto val = text.toLower().trimmed();
   if (val.startsWith("t") || val.startsWith("y")) {
@@ -133,26 +151,61 @@ Tri EvidenceFilters::parseTriFilterValue(const QString& text, bool strict) {
 }
 
 std::vector<std::pair<QString, QString>> EvidenceFilters::tokenizeFilterText(const QString& text) {
-  QStringList list = text.split(":", Qt::SkipEmptyParts);
-  // now in: [Key][value key]...[value] format
-  QStringList keys;
-  QStringList values;
-  keys.append(list.first());
-
-  for (int i = 1; i < list.size() - 1; i++) {
-    auto valueKeyPair = list.at(i).split(" ", Qt::SkipEmptyParts);
-    keys.append(valueKeyPair.last());
-    valueKeyPair.removeLast();
-    values.append(valueKeyPair.join(" "));
-  }
-  values.append(list.last());
-
+  bool inQuote = false;
+  int startWordIndex = 0;
   std::vector<std::pair<QString, QString>> rtn;
 
-  for (int i = 0; i < keys.length(); i++) {
-    auto keyvalue = std::pair<QString, QString>(keys.at(i), values.at(i));
-    rtn.emplace_back(keyvalue);
+  bool hasValue = false;
+  int sepLocation = -1;
+
+  // maybeAddWord performs some validation and standardization on the given area. If the validation
+  // succeeds, then the "word" is added. Otherwise, it's dropped.
+  auto maybeAddWord = [&rtn, &hasValue, text](int startLocation, int sepLocation, int endLocation) {
+    hasValue = false;
+    if (sepLocation == -1) {
+      return;
+    }
+
+    // key and value trim before replacing to allow for leading and/or ending spaces
+    QString key = text.mid(startLocation, sepLocation - startLocation).trimmed().replace("\"", "");
+    QString value = text.mid(sepLocation+1, endLocation - sepLocation).trimmed().replace("\"", "");
+    if (key == "" || value == "") {
+      return;
+    }
+    QString adjustedPhrase = key + ":" + value;
+
+    rtn.push_back(std::pair<QString, QString>(key, value));
+  };
+
+  for(int i = 0; i < text.size(); i++) {
+    QChar ch = text.at(i);
+    bool addWord = false;
+
+    if(sepLocation > -1 && !ch.isSpace()) {
+      hasValue = true;
+    }
+
+    if(ch == '\"') {
+      inQuote = !inQuote;
+      if(inQuote == false) {
+        addWord = true;
+      }
+    }
+    else if(ch == ':' && !inQuote && sepLocation == -1) {
+      sepLocation = i;
+    }
+    else if(ch.isSpace() && !inQuote) {
+      addWord = true;
+    }
+
+    if(addWord && hasValue) {
+      maybeAddWord(startWordIndex, sepLocation, i);
+      sepLocation = -1;
+      startWordIndex = i+1;
+    }
   }
+  maybeAddWord(startWordIndex, sepLocation, text.length()-1);
+
   return rtn;
 }
 
@@ -171,9 +224,6 @@ QDate EvidenceFilters::parseDateString(QString text) {
   return QDate::fromString(text, DATE_FORMAT);
 }
 
-// parseTri returns Tri::Yes if the given text is exactly "Yes", Tri::No if the text is exactly "No"
-// otherwise Tri::Any.
-// This is the inverse of triToString
 Tri EvidenceFilters::parseTri(const QString& text) {
   if (text == "Yes") {
     return Yes;
@@ -184,8 +234,6 @@ Tri EvidenceFilters::parseTri(const QString& text) {
   return Any;
 }
 
-// triToString returns "Yes" for Tri::Yes, "No" for Tri::No, otherwise "Any"
-// This is the inverse to parseTri
 QString EvidenceFilters::triToString(const Tri& tri) {
   switch (tri) {
     case Yes:
@@ -196,3 +244,86 @@ QString EvidenceFilters::triToString(const Tri& tri) {
       return "Any";
   }
 }
+
+void EvidenceFilters::setServer(QString serverUuid) {
+  this->serverUuid = serverUuid;
+}
+
+QString EvidenceFilters::getServerUuid() {
+  return serverUuid;
+}
+QString EvidenceFilters::getServerUuid() const {
+  return serverUuid;
+}
+
+QString EvidenceFilters::getServerName() {
+  return serverUuid == "" ? "" : AppServers::getInstance().serverName(serverUuid);
+}
+
+QString EvidenceFilters::getServerName() const {
+  return serverUuid == "" ? "" : AppServers::getInstance().serverName(serverUuid);
+}
+
+
+void EvidenceFilters::setServerByName(QString serverName) {
+  auto list = AppServers::getInstance().getServers(true);
+  for(auto server : list) {
+    if (server.serverName == serverName) {
+      setServer(server.getServerUuid());
+    }
+  }
+}
+
+
+///////////////////////////////////////////////////////////////////////////
+// once unit tests are available, the should serve as a good starting point
+///////////////////////////////////////////////////////////////////////////
+
+
+//void runTests() {
+//  auto matches = [](std::vector<std::pair<QString, QString>> a, std::vector<std::pair<QString, QString>> b, QString label="") {
+//    if (label != "") {
+//      auto copy = QString(label);
+//      copy.resize(30, ' ');
+//      std::cout << "[" << copy.toStdString() << "]     ";
+//    }
+
+//    if (a.size() != b.size()) {
+//      std::cout << "No match: size difference" << std::endl;
+//      return false;
+//    }
+
+//    for(size_t i = 0; i < a.size(); i++) {
+//      auto expected = a[i];
+//      auto actual = b[i];
+//      if (expected.first != actual.first || expected.second != actual.second) {
+//        std::cout << "No match: [" << expected.first.toStdString() << "]!=[" << actual.first.toStdString()
+//                  << "] || [" << expected.second.toStdString() << "]!=[" << actual.second.toStdString()
+//                  << "]\n";
+//        return false;
+//      }
+//    }
+//    std::cout << "okay!" << std::endl;
+
+//    return true;
+//  };
+//  auto mkpair = [](QString a, QString b){ return std::pair<QString,QString>(a, b); };
+
+//  matches(tokenizeFilterText("a:b"), {mkpair("a", "b")}, "single-plain");
+//  matches(tokenizeFilterText("a:b c:d"), {mkpair("a", "b"), mkpair("c", "d")}, "double-plain");
+//  matches(tokenizeFilterText("a:b  c:d"), {mkpair("a", "b"), mkpair("c", "d")}, "double-extra-space");
+//  matches(tokenizeFilterText("a:b c:d "), {mkpair("a", "b"), mkpair("c", "d")}, "double-trailing-plain");
+//  matches(tokenizeFilterText("a :b c :d"), {mkpair("a", "b"), mkpair("c", "d")}, "left-spaced-sep");
+//  matches(tokenizeFilterText("a: b c: d"), {mkpair("a", "b"), mkpair("c", "d")}, "right-spaced-sep");
+//  matches(tokenizeFilterText("a : b c : d"), {mkpair("a", "b"), mkpair("c", "d")}, "double-spaced-sep");
+//  matches(tokenizeFilterText("name:\"joel smith\" age:38"), {mkpair("name", "joel smith"), mkpair("age", "38")}, "plain-quote");
+//  matches(tokenizeFilterText("name:\"joel smith\"age:38"), {mkpair("name", "joel smith"), mkpair("age", "38")}, "no-gap-quote-val");
+//  matches(tokenizeFilterText("name:\"joel : smith\" age:38"), {mkpair("name", "joel : smith"), mkpair("age", "38")}, "sep-in-quote-val");
+//  matches(tokenizeFilterText("\"name\":\"joel smith\" age:38"), {mkpair("name", "joel smith"), mkpair("age", "38")}, "quoted-key");
+
+//  matches(tokenizeFilterText("a:b c"), {mkpair("a", "b")}, "malformed-extra-endjunk");
+//  matches(tokenizeFilterText("! a:b"), {mkpair("! a", "b")}, "malformed-extra-startjunk");
+
+//  matches(tokenizeFilterText("op:HPCoS server:abcdefgh-0123-0123-0123-0123456789AB"), {mkpair("op", "HPCoS"), mkpair("server", "abcdefgh-0123-0123-0123-0123456789AB")}, "real-life");
+//}
+

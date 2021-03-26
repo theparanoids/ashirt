@@ -107,6 +107,7 @@ class PortingDialog : public QDialog {
   QLineEdit* pathTextBox = nullptr;
   QProgressBar* progressBar = nullptr;
   QCheckBox* portConfigCheckBox = nullptr;
+  QCheckBox* portServersCheckBox = nullptr;
   QCheckBox* portEvidenceCheckBox = nullptr;
 };
 

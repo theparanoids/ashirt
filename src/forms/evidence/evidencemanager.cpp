@@ -19,10 +19,12 @@
 #include "helpers/clipboard/clipboardhelper.h"
 #include "helpers/netman.h"
 #include "helpers/stopreply.h"
+#include "appconfig.h"
 
 enum ColumnIndexes {
   COL_DATE_CAPTURED = 0,
   COL_OPERATION,
+  COL_SERVER,
   COL_PATH,
   COL_CONTENT_TYPE,
   COL_DESCRIPTION,
@@ -37,6 +39,7 @@ static QStringList columnNames() {
   if (names.count() == 0) {
     names.insert(COL_DATE_CAPTURED, "Date Captured");
     names.insert(COL_OPERATION, "Operation");
+    names.insert(COL_SERVER, "Server");
     names.insert(COL_PATH, "Path");
     names.insert(COL_CONTENT_TYPE, "Content Type");
     names.insert(COL_DESCRIPTION, "Description");
@@ -93,7 +96,7 @@ void EvidenceManager::buildEvidenceTableUi() {
 
 void EvidenceManager::buildUi() {
   gridLayout = new QGridLayout(this);
-  filterForm = new EvidenceFilterForm(this);
+  filterForm = new EvidenceFilterForm(db, this);
   evidenceTableContextMenu = new QMenu(this);
   submitEvidenceAction = new QAction("Submit Evidence", evidenceTableContextMenu);
   evidenceTableContextMenu->addAction(submitEvidenceAction);
@@ -278,13 +281,13 @@ void EvidenceManager::deleteSet(std::vector<qint64> ids) {
   if (undeletedFiles.length() > 0) {
     bool logWritten = true;
     auto today = QDateTime::currentDateTime();
-    auto errLogPath = AppConfig::getInstance().evidenceRepo + "/" +QString("%1.log").arg(today.toMSecsSinceEpoch());
+    auto errLogPath = AppConfig::getInstance().evidenceRepo() + "/" + QString("%1.log").arg(today.toMSecsSinceEpoch());
     try {
       FileHelpers::writeFile(errLogPath,
                              "Paths to files that could not be deleted: \n\n" +
                                     undeletedFiles.join("\n"));
     }
-    catch(FileError &e) {
+    catch (FileError &e) {
       logWritten = false;
     }
     QString msg = "Some files could not be deleted.";
@@ -326,6 +329,7 @@ void EvidenceManager::openTableContextMenu(QPoint pos) {
 void EvidenceManager::resetFilterButtonClicked() {
   EvidenceFilters filter;
   filter.operationSlug = AppSettings::getInstance().operationSlug();
+  filter.setServer(AppSettings::getInstance().serverUuid());
   filterTextBox->setText(filter.toString());
   loadEvidence();
 }
@@ -360,6 +364,7 @@ void EvidenceManager::loadEvidence() {
       evidenceTable->setItem(row, COL_OPERATION, rowData.operation);
       evidenceTable->setItem(row, COL_DESCRIPTION, rowData.description);
       evidenceTable->setItem(row, COL_CONTENT_TYPE, rowData.contentType);
+      evidenceTable->setItem(row, COL_SERVER, rowData.server);
       evidenceTable->setItem(row, COL_DATE_CAPTURED, rowData.dateCaptured);
       evidenceTable->setItem(row, COL_PATH, rowData.path);
       evidenceTable->setItem(row, COL_FAILED, rowData.failed);
@@ -408,7 +413,7 @@ EvidenceRow EvidenceManager::buildBaseEvidenceRow(qint64 evidenceID) {
   row.path = basicItem();
   row.errorText = basicItem();
   row.dateSubmitted = basicItem();
-
+  row.server = basicItem();
   row.submitted = basicItem();
   row.submitted->setTextAlignment(Qt::AlignCenter);
   row.failed = basicItem();
@@ -423,9 +428,17 @@ void EvidenceManager::setRowText(int row, const model::Evidence& model) {
   auto setColText = [this, row](int col, QString text) {
     evidenceTable->item(row, col)->setText(text);
   };
+
+  // try to use normal names for servers, if possible
+  auto serverValue = AppServers::getInstance().serverName(model.serverUuid);
+  if (serverValue.isEmpty()) {
+    serverValue = model.serverUuid;
+  }
+
   setColText(COL_DATE_CAPTURED, model.recordedDate.toLocalTime().toString(dateFormat));
   setColText(COL_DESCRIPTION, model.description);
   setColText(COL_OPERATION, model.operationSlug);
+  setColText(COL_SERVER, serverValue);
   setColText(COL_CONTENT_TYPE, model.contentType);
   setColText(COL_SUBMITTED, model.uploadDate.isNull() ? "No" : "Yes");
   setColText(COL_FAILED, model.errorText == "" ? "" : "Yes");

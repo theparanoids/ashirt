@@ -73,7 +73,12 @@ class FileError : public std::runtime_error {
   QFileDevice::FileError fileDeviceError;
 
  private:
-  FileError(std::string msg) : std::runtime_error(msg) {}
+  FileError(std::string msg) : FileError(msg, QFileDevice::NoError) {}
+  FileError(std::string msg, QFileDevice::FileError err) : std::runtime_error(msg) {
+    rootError = err;
+  }
+
+  QFileDevice::FileError rootError;
 };
 
 #endif  // FILEERROR_H

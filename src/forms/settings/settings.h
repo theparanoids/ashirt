@@ -10,14 +10,12 @@
 #include <QDialogButtonBox>
 #include <QErrorMessage>
 #include <QGridLayout>
-#include <QLabel>
-#include <QLineEdit>
-#include <QNetworkReply>
-#include <QPushButton>
-#include <QSpacerItem>
-#include <QKeySequenceEdit>
+#include <QTabWidget>
 
-#include "components/loading_button/loadingbutton.h"
+#include "general_settingstab.h"
+#include "connections_settingstab.h"
+#include "components/connection_checker/connectionchecker.h"
+#include "db/databaseconnection.h"
 #include "hotkeymanager.h"
 
 /**
@@ -33,7 +31,7 @@ class Settings : public QDialog {
    * @param hotkeyManager a handle to the HotkeyManager, so hotkeys may be updated upon saving.
    * @param parent
    */
-  explicit Settings(HotkeyManager* hotkeyManager, QWidget* parent = nullptr);
+  explicit Settings(DatabaseConnection* db, HotkeyManager* hotkeyManager, QWidget* parent = nullptr);
   ~Settings();
 
  private:
@@ -46,54 +44,38 @@ class Settings : public QDialog {
   /// onCancelClicked handles the discard operation. Used when the "Cancel" button is pressed.
   void onCancelClicked();
 
+  /// saveConnectionsData saves changes made in the ConnectionsSettingsTab
+  void saveConnectionsData();
+
+  /// saveGeneralData saves changes made in the GeneralSettingsTab
+  void saveGeneralData();
+
  public slots:
   /// showEvent extends the native showEvent handler. Restores the UI to system values.
   void showEvent(QShowEvent* evt) override;
   /// closeEvent extends the native closeEvent handler. Saves data prior to closing.
   void closeEvent(QCloseEvent* event) override;
 
-  /// onTestConnectionClicked acts upon the "test connection" button press. Checks the network.
-  void onTestConnectionClicked();
-  /// onTestRequestComplete handles the network result action.
-  void onTestRequestComplete();
-  /// onBrowseClicked triggers when the "browse" button is pressed. Shows a file dialog to the user.
-  void onBrowseClicked();
 
  private:
   /// hotkeyManager is a (shared) reference to the HotkeyManager. Not to be deleted.
   HotkeyManager* hotkeyManager;
+  /// db is a shared reference to the database. Do not delete
+  DatabaseConnection* db;
 
-  QNetworkReply* currentTestReply = nullptr;
   QAction* closeWindowAction = nullptr;
 
-  // UI components
-  QGridLayout* gridLayout = nullptr;
-  QLabel* _eviRepoLabel = nullptr;
-  QLabel* _accessKeyLabel = nullptr;
-  QLabel* _secretKeyLabel = nullptr;
-  QLabel* _hostPathLabel = nullptr;
-  QLabel* _captureAreaCmdLabel = nullptr;
-  QLabel* _captureAreaShortcutLabel = nullptr;
-  QLabel* _captureWindowCmdLabel = nullptr;
-  QLabel* _captureWindowShortcutLabel = nullptr;
-  QLabel* _recordCodeblockShortcutLabel = nullptr;
-  QLabel* connStatusLabel = nullptr;
+  // Ui Elements
+  QGridLayout* gridLayout;
+  QTabWidget* tabControl;
 
-  QLineEdit* eviRepoTextBox = nullptr;
-  QLineEdit* accessKeyTextBox = nullptr;
-  QLineEdit* secretKeyTextBox = nullptr;
-  QLineEdit* hostPathTextBox = nullptr;
-  QLineEdit* captureAreaCmdTextBox = nullptr;
-  QKeySequenceEdit* captureAreaShortcutTextBox = nullptr;
-  QLineEdit* captureWindowCmdTextBox = nullptr;
-  QKeySequenceEdit* captureWindowShortcutTextBox = nullptr;
-  QKeySequenceEdit* recordCodeblockShortcutTextBox = nullptr;
-  LoadingButton* testConnectionButton = nullptr;
-  QPushButton* eviRepoBrowseButton = nullptr;
+  GeneralSettingsTab* generalTab = nullptr;
+  ConnectionsSettingsTab* connectionsTab = nullptr;
+
+  QSpacerItem* spacer = nullptr;
   QDialogButtonBox* buttonBox = nullptr;
 
   QErrorMessage* couldNotSaveSettingsMsg = nullptr;
-  QSpacerItem* spacer = nullptr;
 };
 
 #endif  // SETTINGS_H

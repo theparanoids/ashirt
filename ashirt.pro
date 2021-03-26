@@ -44,6 +44,7 @@ DEFINES += "VERSION_TAG=$$VERSION_TAG" \
 INCLUDEPATH += src
 
 SOURCES += \
+    src/appservers.cpp \
     src/components/aspectratio_pixmap_label/aspectratiopixmaplabel.cpp \
     src/components/aspectratio_pixmap_label/imageview.cpp \
     src/components/code_editor/codeblockview.cpp \
@@ -55,6 +56,9 @@ SOURCES += \
     src/components/flow_layout/flowlayout.cpp \
     src/components/loading/qprogressindicator.cpp \
     src/components/loading_button/loadingbutton.cpp \
+    src/components/connection_checker/connectionchecker.cpp \
+    src/components/servers_editor/connection_properties.cpp \
+    src/components/servers_editor/servers_list.cpp \
     src/components/tagging/tag_cache/tagcache.cpp \
     src/components/tagging/tag_cache/tagcacheitem.cpp \
     src/components/tagging/tageditor.cpp \
@@ -66,7 +70,10 @@ SOURCES += \
     src/forms/evidence_filter/evidencefilterform.cpp \
     src/forms/getinfo/getinfo.cpp \
     src/forms/porting/porting_dialog.cpp \
+    src/forms/settings/connections_settingstab.cpp \
+    src/forms/settings/general_settingstab.cpp \
     src/helpers/clipboard/clipboardhelper.cpp \
+    src/migrations/migration.cpp \
     src/models/codeblock.cpp \
     src/helpers/multipartparser.cpp \
     src/hotkeymanager.cpp \
@@ -80,6 +87,7 @@ SOURCES += \
     src/forms/settings/settings.cpp
 
 HEADERS += \
+    src/appservers.h \
     src/components/aspectratio_pixmap_label/aspectratiopixmaplabel.h \
     src/components/aspectratio_pixmap_label/imageview.h \
     src/components/code_editor/codeblockview.h \
@@ -93,12 +101,23 @@ HEADERS += \
     src/components/flow_layout/flowlayout.h \
     src/components/loading/qprogressindicator.h \
     src/components/loading_button/loadingbutton.h \
+    src/components/connection_checker/connectionchecker.h \
+    src/components/servers_editor/connection_properties.h \
+    src/components/servers_editor/servers_list.h \
     src/components/tagging/tag_cache/tagcache.h \
     src/components/tagging/tag_cache/tagcacheitem.h \
     src/components/tagging/tageditor.h \
     src/components/tagging/tagginglineediteventfilter.h \
     src/components/tagging/tagview.h \
     src/components/tagging/tagwidget.h \
+    src/config/basic_config.h \
+    src/config/config.h \
+    src/config/config_v1.h \
+    src/config/config_v2.h \
+    src/config/no_config.h \
+    src/config/server_item.h \
+    src/config/server_set.h \
+    src/config/server_v2.h \
     src/db/databaseconnection.h \
     src/db/query_result.h \
     src/dtos/github_release.h \
@@ -110,16 +129,21 @@ HEADERS += \
     src/forms/evidence_filter/evidencefilterform.h \
     src/forms/getinfo/getinfo.h \
     src/forms/porting/porting_dialog.h \
+    src/forms/settings/connections_settingstab.h \
+    src/forms/settings/general_settingstab.h \
     src/helpers/clipboard/clipboardhelper.h \
     src/helpers/constants.h \
     src/helpers/request_builder.h \
     src/helpers/system_helpers.h \
     src/helpers/ui_helpers.h \
+    src/migrations/migration.h \
+    src/migrations/multi_server_migration.h \
     src/models/codeblock.h \
     src/helpers/file_helpers.h \
     src/helpers/http_status.h \
     src/hotkeymanager.h \
     src/models/evidence.h \
+    src/models/server_setting.h \
     src/models/tag.h \
     src/porting/evidence_manifest.h \
     src/porting/system_manifest.h \

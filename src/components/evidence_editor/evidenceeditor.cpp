@@ -201,7 +201,7 @@ std::vector<DeleteEvidenceResponse> EvidenceEditor::deleteEvidence(std::vector<q
       db->deleteEvidence(evi.id);
       resp.dbDeleteSuccess = true;
     }
-    catch(QSqlError &e) {
+    catch (QSqlError &e) {
       resp.dbDeleteSuccess = false;
       resp.errorText = e.text();
     }

@@ -5,11 +5,18 @@ using namespace porting;
 void SystemManifest::applyManifest(SystemManifestImportOptions options, DatabaseConnection* systemDb) {
   bool shouldMigrateConfig = options.importConfig && !configPath.isEmpty();
   bool shouldMigrateDb = options.importDb == SystemManifestImportOptions::Merge && !dbPath.isEmpty();
+  bool shouldMigrateServers = options.importServers && !serversPath.isEmpty();
 
   if (shouldMigrateConfig) {
     emit onStatusUpdate("Importing Settings");
     migrateConfig();
   }
+
+  if (shouldMigrateServers) {
+    emit onStatusUpdate("Importing Servers");
+    migrateServers();
+  }
+
 
   if (shouldMigrateDb) {
     migrateDb(systemDb);
@@ -19,20 +26,43 @@ void SystemManifest::applyManifest(SystemManifestImportOptions options, Database
 
 void SystemManifest::migrateConfig() {
   auto data = FileHelpers::readFile(pathToFile(configPath));
-  parseJSONItem<QString>(data, [](QJsonObject src) {
-    for(const QString& key : src.keys()) {
-      src.remove("evidenceRepo"); // removing evidenceRepo, as we never want to replace what the user has set there.
 
-      // only opting to migrate connection settings, given that translating other options may
-      // cause problems (especially if migrating between oses)
-      if (key != "accessKey" && key != "secretKey" && key != "apiURL") {
-        src.remove(key);
-      }
+  auto config = AppConfig::getInstance().parseConfig(data);
+  // ignoring EvidencePath, as this can be dangerous to overwrite
+  AppConfig::getInstance().setIfEmpty(Config::Fields::CaptureCodeblockShortcut, config->captureCodeblockShortcut());
+  AppConfig::getInstance().setIfEmpty(Config::Fields::CaptureScreenAreaCmd, config->captureScreenAreaCmd());
+  AppConfig::getInstance().setIfEmpty(Config::Fields::CaptureScreenAreaShortcut, config->captureScreenAreaShortcut());
+  AppConfig::getInstance().setIfEmpty(Config::Fields::CaptureScreenWindowCmd, config->captureScreenWindowCmd());
+  AppConfig::getInstance().setIfEmpty(Config::Fields::CaptureScreenWindowShortcut, config->captureScreenWindowShortcut());
+
+  // allow migrations from old style config (v1, which included server info) to the new style
+  // (servers hosted via AppServers)
+  if(config->version() == 1) {
+    auto cfg = (ConfigV1*)config;
+    auto legacyServer = AppServers::getInstance().getServerByUuid(Constants::legacyServerUuid());
+    if( legacyServer.getServerUuid().isEmpty() ) {
+      AppServers::getInstance().addServer(
+        ServerItem(Constants::defaultServerName(), cfg->accessKey(), cfg->secretKey(), cfg->apiURL())
+      );
+      AppServers::getInstance().writeServers();
     }
-    AppConfig::getInstance().applyConfig(src);
-    return "";
-  });
+  }
+
   AppConfig::getInstance().writeConfig(); // save updated config
+}
+
+void SystemManifest::migrateServers() {
+  auto data = FileHelpers::readFile(pathToFile(serversPath));
+  auto serverData = AppServers::getInstance().parseServers(data);
+
+  // merge only unknown servers
+  for (auto importServer : serverData->getServers(false)) {
+    auto foundServer = AppServers::getInstance().getServerByUuid(importServer.getServerUuid());
+    if (foundServer.getServerUuid().isEmpty()) {
+      AppServers::getInstance().addServer(importServer);
+    }
+  }
+  AppServers::getInstance().writeServers();
 }
 
 void SystemManifest::migrateDb(DatabaseConnection* systemDb) {
@@ -49,7 +79,7 @@ void SystemManifest::migrateDb(DatabaseConnection* systemDb) {
           if (importRecord.id == 0) {
             continue; // in the odd situation that evidence doesn't match up, just skip it
           }
-          QString newEvidencePath = AppConfig::getInstance().evidenceRepo + "/" +
+          QString newEvidencePath = AppConfig::getInstance().evidenceRepo() + "/" +
                                     importRecord.operationSlug + "/" +
                                     contentSensitiveFilename(importRecord.contentType);
           QString newEviPathLastFour = newEvidencePath.right(4);
@@ -121,6 +151,12 @@ void SystemManifest::exportManifest(DatabaseConnection* db, const QString& outpu
     emit onStatusUpdate("Exporting settings");
     configPath = "config.json";
     AppConfig::getInstance().writeConfig(basePath + "/" + configPath);
+  }
+
+  if (options.exportServers) {
+    emit onStatusUpdate("Exporting servers");
+    serversPath = "servers.json";
+    AppServers::getInstance().writeServers(basePath + "/" + serversPath);
   }
 
   if (options.exportDb) {

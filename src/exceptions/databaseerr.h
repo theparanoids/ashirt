@@ -4,6 +4,8 @@
 #ifndef DATABASEERR_H
 #define DATABASEERR_H
 
+#include <QString>
+
 #include <stdexcept>
 
 class BadDatabaseStateError : public std::runtime_error {
@@ -15,6 +17,11 @@ class DBDriverUnavailableError : public std::runtime_error {
  public:
   DBDriverUnavailableError(std::string friendlyDriverName)
       : std::runtime_error(friendlyDriverName + " driver is unavailable") {}
+};
+
+class BadDBData : public std::runtime_error {
+ public:
+  BadDBData(QString msg) : std::runtime_error("Bad Data: " + msg.toStdString()) {}
 };
 
 #endif  // DATABASEERR_H

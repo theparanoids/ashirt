@@ -3,5 +3,6 @@
         <file>icons/shirt-dark.svg</file>
         <file>icons/shirt-light.svg</file>
         <file>icons/shirt-red.svg</file>
+        <file>icons/help-icon-small.png</file>
     </qresource>
 </RCC>

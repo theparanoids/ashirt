@@ -12,8 +12,6 @@ LoadingButton::LoadingButton(const QString& text, QWidget* parent, QPushButton* 
   if (model == nullptr) {
     model = this;
   }
-  this->setMinimumSize(model->width(), model->minimumHeight());
-  this->resize(model->width(), model->height());
   this->showingLabel = true;
 
   loading = new QProgressIndicator(this);
@@ -26,6 +24,10 @@ LoadingButton::~LoadingButton() { delete loading; }
 void LoadingButton::startAnimation() {
   label = this->text();
   showLabel(false);
+}
+
+bool LoadingButton::isAnimating() {
+  return !showingLabel;
 }
 
 void LoadingButton::stopAnimation() { showLabel(true); }

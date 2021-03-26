@@ -15,6 +15,7 @@ class Evidence {
   qint64 id;
   QString path;
   QString operationSlug;
+  QString serverUuid;
   QString description;
   QString errorText;
   QString contentType;

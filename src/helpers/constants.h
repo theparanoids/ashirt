@@ -24,6 +24,14 @@ class Constants {
 #endif
   }
 
+  static QString serversLocation() {
+#ifdef Q_OS_MACOS
+    return QStandardPaths::writableLocation(QStandardPaths::DataLocation) + "/servers.json";
+#else
+    return QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + "/ashirt/servers.json";
+#endif
+  }
+
   static QString dbLocation() {
     return QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/evidence.sqlite";
   }
@@ -81,6 +89,12 @@ class Constants {
   /// purposes. This _value_ should not be reused for other db connections.
   static QString defaultDbName() {
     return "evidence";
+  }
+  
+  static QString defaultServerName() { return "default"; }
+
+  static QString legacyServerUuid() {
+    return "20a28c7c-ea24-4ee0-bb94-0ee63018d34b"; // randomly generated value -- this needs to match the value in the multiple-backends migration
   }
 
  private:

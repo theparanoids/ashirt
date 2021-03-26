@@ -5,6 +5,7 @@
 
 #include <QKeySequence>
 
+#include "appservers.h"
 #include "appsettings.h"
 #include "helpers/netman.h"
 #include "helpers/ui_helpers.h"
@@ -23,8 +24,9 @@ static void initializeDateEdit(QDateEdit *dateEdit) {
   dateEdit->setEnabled(false);
 }
 
-EvidenceFilterForm::EvidenceFilterForm(QWidget *parent)
+EvidenceFilterForm::EvidenceFilterForm(DatabaseConnection* db, QWidget *parent)
     : QDialog(parent) {
+  this->db = db;
   buildUi();
   wireUi();
 }
@@ -38,8 +40,10 @@ EvidenceFilterForm::~EvidenceFilterForm() {
   delete _wasSubmittedLabel;
   delete _fromDateLabel;
   delete _toDateLabel;
+  delete _severLabel;
 
   delete operationComboBox;
+  delete serverComboBox;
   delete submittedComboBox;
   delete erroredComboBox;
   delete contentTypeComboBox;
@@ -55,6 +59,7 @@ EvidenceFilterForm::~EvidenceFilterForm() {
 void EvidenceFilterForm::buildUi() {
   gridLayout = new QGridLayout(this);
 
+  _severLabel = new QLabel("Server", this);
   _operationLabel = new QLabel("Operation", this);
   _contentTypeLabel = new QLabel("Content Type", this);
   _hadErrorLabel = new QLabel("Had Error", this);
@@ -67,6 +72,10 @@ void EvidenceFilterForm::buildUi() {
   operationComboBox->setEnabled(false);
   operationComboBox->addItem("Loading...", "");
 
+  serverComboBox = new QComboBox(this);
+  serverComboBox->setEditable(false);
+  populateServerComboBox();
+
   submittedComboBox = new QComboBox(this);
   submittedComboBox->setEditable(false);
   initializeTriCombobox(submittedComboBox);
@@ -77,7 +86,7 @@ void EvidenceFilterForm::buildUi() {
 
   contentTypeComboBox = new QComboBox(this);
   contentTypeComboBox->setEditable(false);
-  contentTypeComboBox->addItem("<None>", "");
+  contentTypeComboBox->addItem("<Any>", "");
   contentTypeComboBox->addItem("Image", "image");
   contentTypeComboBox->addItem("Codeblock", "codeblock");
 
@@ -97,48 +106,63 @@ void EvidenceFilterForm::buildUi() {
        +---------------+-------------+--------------+
     0  | Op  Lbl       | Op CB                      |
        +---------------+-------------+--------------+
-    1  | C. Type Lbl   | Content Type CB            |
+    1  | Op  Lbl       | Op CB                      |
        +---------------+-------------+--------------+
-    2  | hadErr Lbl    | had Error CB               |
+    2  | C. Type Lbl   | Content Type CB            |
        +---------------+-------------+--------------+
-    3  | Submit Lbl    | Was Submitted CB           |
+    3  | hadErr Lbl    | had Error CB               |
        +---------------+-------------+--------------+
-    4  | From Lbl      | From DtSel  | incl From CB |
+    4  | Submit Lbl    | Was Submitted CB           |
        +---------------+-------------+--------------+
-    5  | To Lbl        | To DtSel    | incl To CB   |
+    5  | From Lbl      | From DtSel  | incl From CB |
        +---------------+-------------+--------------+
-    6  | Dialog button Box{ok}                      |
+    6  | To Lbl        | To DtSel    | incl To CB   |
+       +---------------+-------------+--------------+
+    7  | Dialog button Box{ok}                      |
        +---------------+-------------+--------------+
   */
 
+  int row = 0;
   // row 0
-  gridLayout->addWidget(_operationLabel, 0, 0);
-  gridLayout->addWidget(operationComboBox, 0, 1, 1, 2);
+  gridLayout->addWidget(_severLabel, row, 0);
+  gridLayout->addWidget(serverComboBox, row, 1, 1, 2);
+  row++;
 
-  // row 1
-  gridLayout->addWidget(_contentTypeLabel, 1, 0);
-  gridLayout->addWidget(contentTypeComboBox, 1, 1, 1, 2);
+  // row 0
+  gridLayout->addWidget(_operationLabel, row, 0);
+  gridLayout->addWidget(operationComboBox, row, 1, 1, 2);
+  row++;
 
   // row 2
-  gridLayout->addWidget(_hadErrorLabel, 2, 0);
-  gridLayout->addWidget(erroredComboBox, 2, 1, 1, 2);
+  gridLayout->addWidget(_contentTypeLabel, row, 0);
+  gridLayout->addWidget(contentTypeComboBox, row, 1, 1, 2);
+  row++;
 
   // row 3
-  gridLayout->addWidget(_wasSubmittedLabel, 3, 0);
-  gridLayout->addWidget(submittedComboBox, 3, 1, 1, 2);
+  gridLayout->addWidget(_hadErrorLabel, row, 0);
+  gridLayout->addWidget(erroredComboBox, row, 1, 1, 2);
+  row++;
 
   // row 4
-  gridLayout->addWidget(_fromDateLabel, 4, 0);
-  gridLayout->addWidget(fromDateEdit, 4, 1);
-  gridLayout->addWidget(includeStartDateCheckBox, 4, 2);
+  gridLayout->addWidget(_wasSubmittedLabel, row, 0);
+  gridLayout->addWidget(submittedComboBox, row, 1, 1, 2);
+  row++;
 
   // row 5
-  gridLayout->addWidget(_toDateLabel, 5, 0);
-  gridLayout->addWidget(toDateEdit, 5, 1);
-  gridLayout->addWidget(includeEndDateCheckBox, 5, 2);
+  gridLayout->addWidget(_fromDateLabel, row, 0);
+  gridLayout->addWidget(fromDateEdit, row, 1);
+  gridLayout->addWidget(includeStartDateCheckBox, row, 2);
+  row++;
 
   // row 6
-  gridLayout->addWidget(buttonBox, 6, 0, 1, gridLayout->columnCount());
+  gridLayout->addWidget(_toDateLabel, row, 0);
+  gridLayout->addWidget(toDateEdit, row, 1);
+  gridLayout->addWidget(includeEndDateCheckBox, row, 2);
+  row++;
+
+  // row 7
+  gridLayout->addWidget(buttonBox, row, 0, 1, gridLayout->columnCount());
+  row++;
 
   closeWindowAction = new QAction(this);
   closeWindowAction->setShortcut(QKeySequence::Close);
@@ -152,6 +176,7 @@ void EvidenceFilterForm::buildUi() {
 void EvidenceFilterForm::wireUi() {
   erroredComboBox->installEventFilter(this);
   operationComboBox->installEventFilter(this);
+  serverComboBox->installEventFilter(this);
   submittedComboBox->installEventFilter(this);
   contentTypeComboBox->installEventFilter(this);
 
@@ -165,6 +190,31 @@ void EvidenceFilterForm::wireUi() {
           [this](bool checked) { toDateEdit->setEnabled(checked); });
 
   connect(closeWindowAction, &QAction::triggered, this, &EvidenceFilterForm::writeAndClose);
+}
+
+void EvidenceFilterForm::resetOperations() {
+  QString serverUuid = serverComboBox->currentData().toString();
+  if(serverUuid == "") {
+    updateOperationsList("", true, {});
+  }
+  else {
+    auto foundServer = AppServers::getInstance().getServerByUuid(serverUuid);
+    if (foundServer.isValid()) {
+      operationComboBox->setEnabled(false);
+      auto reply = NetMan::getInstance().getAllOperations(foundServer.hostPath, foundServer.accessKey, foundServer.secretKey);
+      connect(reply, &QNetworkReply::finished, [reply, this, serverUuid](){
+        bool success = false;
+        // only update if the current uuid matches -- otherwise we might show the wrong list of operations for a server
+        if(serverComboBox->currentData().toString() == serverUuid) {
+          auto ops = NetMan::getInstance().parseOpsResponse(reply, success);
+          updateOperationsList(serverUuid, success, ops);
+        }
+        reply->close();
+        reply->deleteLater();
+        operationComboBox->setEnabled(true);
+      });
+    }
+  }
 }
 
 void EvidenceFilterForm::writeAndClose() {
@@ -183,6 +233,7 @@ EvidenceFilters EvidenceFilterForm::encodeForm() {
   filter.hasError = EvidenceFilters::parseTri(erroredComboBox->currentText());
   filter.submitted = EvidenceFilters::parseTri(submittedComboBox->currentText());
   filter.operationSlug = operationComboBox->currentData().toString();
+  filter.setServer(serverComboBox->currentData().toString());
   filter.contentType = contentTypeComboBox->currentData().toString();
 
   // swap dates so smaller date is always "from" / after
@@ -204,6 +255,9 @@ EvidenceFilters EvidenceFilterForm::encodeForm() {
 }
 
 void EvidenceFilterForm::setForm(const EvidenceFilters &model) {
+  enableServerSelectionConnection(false);
+  operationComboBox->setEnabled(true);
+  UiHelpers::setComboBoxValue(serverComboBox, model.getServerUuid());
   UiHelpers::setComboBoxValue(operationComboBox, model.operationSlug);
   UiHelpers::setComboBoxValue(contentTypeComboBox, model.contentType);
   erroredComboBox->setCurrentText(EvidenceFilters::triToString(model.hasError));
@@ -224,22 +278,82 @@ void EvidenceFilterForm::setForm(const EvidenceFilters &model) {
     fromDateEdit->setDate(toDateEdit->date());
     toDateEdit->setDate(copy);
   }
+  enableServerSelectionConnection(true);
+}
+
+void EvidenceFilterForm::enableServerSelectionConnection(bool enable) {
+  if (enable) {
+    connect(serverComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
+          this, &EvidenceFilterForm::resetOperations);
+  }
+  else {
+    disconnect(serverComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
+          this, &EvidenceFilterForm::resetOperations);
+  }
+}
+
+void EvidenceFilterForm::updateOperationsList(QString selectedServerUUID, bool success, const std::vector<dto::Operation> &operations) {
+  operationComboBox->setEnabled(false);
+  operationComboBox->clear();
+  operationComboBox->addItem("<Any>", "");
+
+  std::vector<QString> knownOperationSlugs;
+  std::vector<QString> missingSlugs;
+  if (selectedServerUUID != "") {
+    knownOperationSlugs = db->operationSlugsForServer(selectedServerUUID);
+  }
+
+  auto addOrphanedSlug = [this](std::vector<QString> slugs){
+    for (const auto &slug : slugs) {
+      operationComboBox->addItem(slug + " (removed)", slug);
+    }
+  };
+
+  if (!success) {
+    operationComboBox->setItemText(0, "Unable to fetch operations");
+    operationComboBox->setCurrentIndex(0);
+    addOrphanedSlug(knownOperationSlugs);
+    return;
+  }
+
+  for (const auto &op : operations) {
+    operationComboBox->addItem(op.name, op.slug);
+    //if(!knownOperationSlugs.contains(op.slug)) {
+  }
+  for (const auto &slug : knownOperationSlugs) {
+    bool found = false;
+    for(const auto &op : operations) {
+      if (slug == op.slug) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      missingSlugs.push_back(slug);
+    }
+  }
+  addOrphanedSlug(missingSlugs);
+
+  UiHelpers::setComboBoxValue(operationComboBox, AppSettings::getInstance().operationSlug());
+  operationComboBox->setEnabled(true);
 }
 
 void EvidenceFilterForm::onOperationListUpdated(bool success,
                                                 const std::vector<dto::Operation> &operations) {
-  operationComboBox->setEnabled(false);
-  if (!success) {
-    operationComboBox->setItemText(0, "Unable to fetch operations");
-    operationComboBox->setCurrentIndex(0);
-    return;
-  }
 
-  operationComboBox->clear();
-  operationComboBox->addItem("<None>", "");
-  for (const auto &op : operations) {
-    operationComboBox->addItem(op.name, op.slug);
+  updateOperationsList(AppServers::getInstance().currentServerUuid(), success, operations);
+}
+
+void EvidenceFilterForm::populateServerComboBox() {
+  serverComboBox->addItem("<Any>", "");
+  try {
+    std::vector<ServerItem> servers = AppServers::getInstance().getServers(true);
+
+    for (auto s : servers) {
+      serverComboBox->addItem(s.serverName, s.getServerUuid());
+    }
   }
-  UiHelpers::setComboBoxValue(operationComboBox, AppSettings::getInstance().operationSlug());
-  operationComboBox->setEnabled(true);
+  catch(const std::exception& e) {
+    std::cerr << "Unable to get server details: " << e.what() << std::endl;
+  }
 }

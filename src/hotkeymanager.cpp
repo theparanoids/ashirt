@@ -7,7 +7,6 @@
 #include <iostream>
 
 #include "appconfig.h"
-#include "appsettings.h"
 
 HotkeyManager::HotkeyManager() {
   hotkeyManager = new UGlobalHotkeys();
@@ -43,7 +42,7 @@ void HotkeyManager::updateHotkeys() {
       registerKey(combo, evt);
     }
   };
-  regKey(AppConfig::getInstance().screenshotShortcutCombo, ACTION_CAPTURE_AREA);
-  regKey(AppConfig::getInstance().captureWindowShortcut, ACTION_CAPTURE_WINDOW);
-  regKey(AppConfig::getInstance().captureCodeblockShortcut, ACTION_CAPTURE_CODEBLOCK);
+  regKey(AppConfig::getInstance().captureScreenAreaShortcut(), ACTION_CAPTURE_AREA);
+  regKey(AppConfig::getInstance().captureScreenWindowShortcut(), ACTION_CAPTURE_WINDOW);
+  regKey(AppConfig::getInstance().captureCodeblockShortcut(), ACTION_CAPTURE_CODEBLOCK);
 }

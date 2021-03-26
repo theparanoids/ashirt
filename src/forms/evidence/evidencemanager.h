@@ -29,6 +29,7 @@ struct EvidenceRow {
   QTableWidgetItem* path;
   QTableWidgetItem* errorText;
   QTableWidgetItem* dateSubmitted;
+  QTableWidgetItem* server;
 };
 
 /**

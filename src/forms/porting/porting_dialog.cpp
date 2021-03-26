@@ -19,6 +19,7 @@ PortingDialog::~PortingDialog() {
 
   delete _selectFileLabel;
   delete portConfigCheckBox;
+  delete portServersCheckBox;
   delete portEvidenceCheckBox;
   delete submitButton;
   delete pathTextBox;
@@ -41,6 +42,9 @@ void PortingDialog::buildUi() {
   portConfigCheckBox->setChecked(true);
   portEvidenceCheckBox = new QCheckBox("Include Evidence", this);
   portEvidenceCheckBox->setChecked(true);
+  portServersCheckBox = new QCheckBox("Include Servers", this);
+  portServersCheckBox->setChecked(true);
+
   progressBar = new QProgressBar(this);
 
 
@@ -62,13 +66,15 @@ void PortingDialog::buildUi() {
        +---------------+-------------+--------------+
     1  |                 With Cfg CB                |
        +---------------+-------------+--------------+
-    2  |                 With data CB               |
+    2  |               With servers CB              |
        +---------------+-------------+--------------+
-    3  |                 Progress Bar               |
+    3  |                 With data CB               |
        +---------------+-------------+--------------+
-    4  |                Porting Status              |
+    4  |                 Progress Bar               |
        +---------------+-------------+--------------+
-    5  | <None>        | <None>      | Submit Btn   |
+    5  |                Porting Status              |
+       +---------------+-------------+--------------+
+    6  | <None>        | <None>      | Submit Btn   |
        +---------------+-------------+--------------+
   */
 
@@ -81,16 +87,19 @@ void PortingDialog::buildUi() {
   gridLayout->addWidget(portConfigCheckBox, 1, 0, 1, gridLayout->columnCount());
 
   // row 2
-  gridLayout->addWidget(portEvidenceCheckBox, 2, 0, 1, gridLayout->columnCount());
+  gridLayout->addWidget(portServersCheckBox, 2, 0, 1, gridLayout->columnCount());
 
   // row 3
-  gridLayout->addWidget(progressBar, 3, 0, 1, gridLayout->columnCount());
+  gridLayout->addWidget(portEvidenceCheckBox, 3, 0, 1, gridLayout->columnCount());
 
   // row 4
-  gridLayout->addWidget(portStatusLabel, 4, 0, 1, gridLayout->columnCount());
+  gridLayout->addWidget(progressBar, 4, 0, 1, gridLayout->columnCount());
 
   // row 5
-  gridLayout->addWidget(submitButton, 5, 2);
+  gridLayout->addWidget(portStatusLabel, 6, 0, 1, gridLayout->columnCount());
+
+  // row 6
+  gridLayout->addWidget(submitButton, 6, 2);
 
   closeWindowAction = new QAction(this);
   closeWindowAction->setShortcut(QKeySequence::Close);
@@ -131,6 +140,7 @@ void PortingDialog::resetForm() {
     progressBar->setValue(0);
     portStatusLabel->setText("");
     portConfigCheckBox->setCheckState(Qt::Unchecked);
+    portServersCheckBox->setCheckState(Qt::Unchecked);
     portEvidenceCheckBox->setCheckState(Qt::Unchecked);
     submitButton->setText(dialogType == Import ? "Import" : "Export");
 }
@@ -198,6 +208,7 @@ QString PortingDialog::getPortPath() {
 void PortingDialog::doExport(porting::SystemManifest* manifest, const QString& exportPath) {
   porting::SystemManifestExportOptions options;
   options.exportDb = portEvidenceCheckBox->isChecked();
+  options.exportServers = portServersCheckBox->isChecked();
   options.exportConfig = portConfigCheckBox->isChecked();
 
   // Qt db access is limited to single-thread access. A new connection needs to be made, hence
@@ -236,6 +247,7 @@ porting::SystemManifest* PortingDialog::doPreImport(const QString& pathToSystemM
 void PortingDialog::doImport(porting::SystemManifest* manifest) {
   porting::SystemManifestImportOptions options;
   options.importDb = portEvidenceCheckBox->isChecked() ? options.Merge : options.None;
+  options.importServers = portServersCheckBox->isChecked();
   options.importConfig = portConfigCheckBox->isChecked();
 
   QString threadedDbName = Constants::defaultDbName() + "_mt_forImport";

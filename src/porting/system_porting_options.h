@@ -13,12 +13,16 @@ class SystemManifestExportOptions {
   /// includesAnything is a simple function that checks if any export option is "true" (i.e. something that
   /// can be exported).
   bool includesAnything() const {
-    return exportConfig || exportDb;
+    return exportConfig || exportDb || exportServers;
   }
 
  public:
   /// exportConfig is a flag that denotes if the configuration file shall be exported. True = Yes, export. False = No, do not export
   bool exportConfig = true;
+
+  /// exportServers is a flag that denotes if the servers information shall be exported. True = Yes, export. False = No, do not export
+  bool exportServers = true;
+
   /// exportDb is a flag that denotes if the database (and evidence files) shall be exported. True = Yes, export. False = No, do not export
   bool exportDb = true;
 };
@@ -41,12 +45,16 @@ class SystemManifestImportOptions {
   /// includesAnything is a simple function that checks if any import option is set to add data
   /// (i.e. that there is work to be done)
   bool includesAnything() const {
-    return importConfig || (importDb != None);
+    return importConfig || (importDb != None) || importServers;
   }
 
  public:
   /// importConfig is a flag that denotes if the configuration file shall be imported. True = Yes, import. False = No, do not import
   bool importConfig = true;
+
+  /// importServers is a flag that denotes if the servers information shall be imported. True = Yes, import. False = No, do not import
+  bool importServers = true;
+
   /// importDb is an ImportAction that determines HOW importing should proceed.
   ImportAction importDb = Merge;
 };
