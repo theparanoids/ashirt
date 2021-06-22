@@ -28,7 +28,7 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest, ubuntu-16.04]
-        qt-version: ['5.15.2']
+        qt-version: ['6.1.0']
       fail-fast: false
     runs-on: ${{ matrix.os }}
 
@@ -49,7 +49,7 @@ jobs:
         key: ${{ runner.os }}-QtCache-${{ matrix.qt-version }}
 
     - name: Install Qt on Linux  # we can also use this for macs
-      if: matrix.os == 'ubuntu-16.04'
+      if: matrix.os == 'ubuntu-20.04'
       uses: jurplel/install-qt-action@v2
       with:
         version: ${{ matrix.qt-version }}
@@ -84,9 +84,9 @@ jobs:
         contains(github.ref, 'refs/heads/master') != true &&
         contains(github.ref, 'refs/heads/release') != true
       run: |
-        brew install qt@5
-        export PATH="/usr/local/opt/qt@5/bin:$PATH"
-        brew link -f qt@5
+        brew install qt@6
+        export PATH="/usr/local/opt/qt@6/bin:$PATH"
+        brew link -f qt@6
         qmake -config release
         make
         macdeployqt ashirt.app -dmg
@@ -109,9 +109,9 @@ jobs:
         matrix.os == 'macos-latest' &&
         (contains(github.ref, 'tags/v') || github.ref == 'refs/heads/master' || contains(github.ref, 'refs/heads/release'))
       run: |
-        brew install qt@5
-        export PATH="/usr/local/opt/qt@5/bin:$PATH"
-        brew link -f qt@5
+        brew install qt@6
+        export PATH="/usr/local/opt/qt@6/bin:$PATH"
+        brew link -f qt@6
         qmake -config release
         make
         macdeployqt ashirt.app -dmg -always-overwrite -sign-for-notarization="John Kennedy"

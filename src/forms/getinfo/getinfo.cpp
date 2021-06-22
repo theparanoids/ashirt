@@ -10,7 +10,7 @@
 #include "components/evidence_editor/evidenceeditor.h"
 #include "helpers/netman.h"
 #include "helpers/stopreply.h"
-#include "helpers/ui_helpers.h"
+#include "helpers/u_helpers.h"
 
 GetInfo::GetInfo(DatabaseConnection* db, qint64 evidenceID, QWidget* parent)
     : QDialog(parent), db(db), evidenceID(evidenceID) {

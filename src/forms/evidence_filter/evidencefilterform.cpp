@@ -7,7 +7,7 @@
 
 #include "appsettings.h"
 #include "helpers/netman.h"
-#include "helpers/ui_helpers.h"
+#include "helpers/u_helpers.h"
 
 static void initializeTriCombobox(QComboBox *box) {
   box->clear();

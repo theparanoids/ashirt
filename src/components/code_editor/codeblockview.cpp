@@ -1,7 +1,7 @@
 #include "codeblockview.h"
 
 #include "exceptions/fileerror.h"
-#include "helpers/ui_helpers.h"
+#include "helpers/u_helpers.h"
 
 CodeBlockView::CodeBlockView(QWidget* parent) : EvidencePreview(parent) {
   buildUi();
